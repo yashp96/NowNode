@@ -1,1 +1,12 @@
 *.o
+build/app_update/component_project_vars.mk
+*.d
+*.a
+*.bin
+*.elf
+*.map
+build/app_update/tmp_cppflags.txt
+*.mk
+*.ld
+*.conf
+build/ldgen_libraries
