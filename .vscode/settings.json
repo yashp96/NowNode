@@ -1,0 +1,9 @@
+{
+    "idf.adapterTargetName": "esp8266",
+    "cmake.configureOnOpen": true,
+    "files.associations": {
+        "espnow_defines.h": "c",
+        "assert.h": "c",
+        "esp_node.h": "c"
+    }
+}
