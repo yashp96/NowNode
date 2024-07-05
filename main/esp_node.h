@@ -13,6 +13,8 @@
 
 #define ESPNOW_MAX_PAYLOAD_LEN 200
 
+#define MAX_SENSOR_NODES    20
+
 /* TODO: send broadcast message only to advertise self meta data
 for actual data use query-response method 
 register a node using advertise based on device type */
@@ -26,10 +28,32 @@ register a node using advertise based on device type */
 #define INDEX_ESPNOW_ADVERT_RSV2    6
 #define INDEX_ESPNOW_SIMULATION     7
 
+typedef enum DEVICE_TYPE
+{
+    SENSOR_NODE = 1,
+    SENSOR_HUB,
+    ESPNOW_TO_WIFI_GATEWAY,
+    ESPNOW_TO_ESPNOW_GATEWAY,
+    UNKNOWN_DEVICE
+}
+device_type_t;
+
+typedef enum SENSOR_TYPE
+{
+    TEMPERATURE_SENSOR = 1,
+    HUMIDITY_SENSOR,
+    PRESSURE_SENSOR,
+    LUX_SENSOR,
+    MOISTURE_SENSOR
+}
+sensor_type_t;
+
 typedef enum TX_MSG_TYPE_E
 {
-    MSG_BROADCAST,
-    MSG_UNICAST
+    MSG_UNICAST = 0x1B,     //  Unicast Query
+    MSG_BROADCAST = 0xFF,   //  Broadcast
+    MSG_ADVERTISE = 0xAF,    //  Advertise device
+    MSG_ADVERT_ACK = 0xAA   //  Acknowledgment for advertisment message
 }
 tx_msg_type_e;
 
@@ -60,7 +84,6 @@ rxd_obj_t;
 //
 void InitESPNow();
 void ESPNow_Deinit();
-void ESPNowPrepareData(espnow_tx_param_t *send_param);
 
 //
 // simulation functions

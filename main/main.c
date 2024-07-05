@@ -40,7 +40,7 @@ void InitWiFi()
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(ESPNOW_WIFI_MODE));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_set_channel(ESPNOW_CHANNEL, 0))
+    ESP_ERROR_CHECK(esp_wifi_set_channel(ESPNOW_CHANNEL, 0))    
 }
 
 void app_main()
@@ -48,5 +48,5 @@ void app_main()
     ESP_ERROR_CHECK(nvs_flash_init());
     InitWiFi();
     InitESPNow();
-    InitSensor();
+    // InitSensor();
 }

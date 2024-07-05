@@ -25,18 +25,43 @@
 #define MINIMUM_STACK configMINIMAL_STACK_SIZE
 
 static uint8_t  EspNowBuffer[ESPNOW_MAX_PAYLOAD_LEN] = { 0 };
+static esp_now_peer_info_t PeerList[MAX_SENSOR_NODES] = { { { 0 } } };
 
 const uint8_t BroadcastMAC[ESP_MAC_LEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-static uint16_t ESPNowSeq[ESPNOW_DATA_MAX] = { 0, 0 };
 
 xQueueHandle ESPNowRxQueue;
 TaskHandle_t RxProcessHandle = NULL;
+TaskHandle_t AdvertiseHandle = NULL;
 TaskHandle_t SensorTaskHandle = NULL;
 
 static void ESPNowSendCallback(const uint8_t* mac_address, esp_now_send_status_t status);
 static void ESPNowReceiveCallback(const uint8_t* mac_address, const uint8_t *data, int len);
+
+static void vTaskAdvertise(void* pvParameter);
 static void vTaskProcessRxdData(void* pvParameters);
+
 static void vTaskSendSensorData(void* pvParameter);
+
+void ESPAddPeer(rxd_obj_t rx_obj)
+{
+    esp_now_peer_info_t* peer = (esp_now_peer_info_t*)malloc(sizeof(esp_now_peer_info_t));
+    uint8_t* buffr = (uint8_t*)&rx_obj.sensor_obj;
+
+    if(peer != NULL)
+    {
+        memset(peer, 0, sizeof(esp_now_peer_info_t));
+        peer->channel = buffr[INDEX_ESPNOW_CHANNEL];
+        peer->ifidx = buffr[INDEX_ESPNOW_IF_TYPE];
+        peer->encrypt = true;
+        memcpy(peer->peer_addr, rx_obj.src_mac, ESP_MAC_LEN);
+        ESP_ERROR_CHECK(esp_now_add_peer(peer));
+        free(peer);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "ESPAddPeer - malloc failed");
+    }
+}
 
 void InitESPBroadcast()
 {
@@ -54,7 +79,7 @@ void InitESPBroadcast()
     }
     else
     {
-        ESP_LOGE(TAG, "InitESPBroadcast() - malloc failed");
+        ESP_LOGE(TAG, "InitESPBroadcast - malloc failed");
     }
 }
 
@@ -65,7 +90,7 @@ void InitESPNow()
     ESP_ERROR_CHECK(esp_now_register_recv_cb(ESPNowReceiveCallback));
     ESP_ERROR_CHECK(esp_now_set_pmk((uint8_t*)ESP_PMK));
     InitESPBroadcast();
-    ESPNowRxQueue = xQueueCreate(RX_QUEUE_LEN, sizeof(rxd_obj_t*));
+    ESPNowRxQueue = xQueueCreate(RX_QUEUE_LEN, sizeof(rxd_obj_t));
     if(ESPNowRxQueue == NULL)
     {
         ESP_LOGE(TAG, "ESPNowRxQueue initialization failed");
@@ -76,6 +101,12 @@ void InitESPNow()
     {
         ESP_LOGE(TAG, "RxProcessor initialization failed");
     }
+
+    if( xTaskCreate(vTaskAdvertise, "AvertiseProcess", MINIMUM_STACK,
+    NULL, 3, &AdvertiseHandle) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Advertisement initialization failed");
+    }
 }
 
 void ESPNow_Deinit()
@@ -83,56 +114,19 @@ void ESPNow_Deinit()
     esp_now_deinit();
 }
 
-void ESPNowPrepareData(espnow_tx_param_t *send_param)
-{
-    espnow_data_t *buf = (espnow_data_t *)send_param->buffer;
-    int i = 0;
-
-    assert(send_param->len >= sizeof(espnow_data_t));
-
-    buf->type = IS_BROADCAST_ADDR(send_param->dest_mac) ? ESPNOW_DATA_BROADCAST : ESPNOW_DATA_UNICAST;
-    buf->state = send_param->state;
-    buf->seq_num = ESPNowSeq[buf->type]++;
-    buf->crc = 0;
-    buf->magic = send_param->magic;
-    for (i = 0; i < send_param->len - sizeof(espnow_data_t); i++) {
-        buf->payload[i] = (uint8_t)esp_random();
-    }
-    buf->crc = crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
-}
-
-int ESPNowParseData(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t *seq, int *magic)
-{
-    espnow_data_t *buf = (espnow_data_t *)data;
-    uint16_t crc, crc_cal = 0;
-
-    if (data_len < sizeof(espnow_data_t)) {
-        ESP_LOGE(TAG, "Receive ESPNOW data too short, len:%d", data_len);
-        return -1;
-    }
-
-    *state = buf->state;
-    *seq = buf->seq_num;
-    *magic = buf->magic;
-    crc = buf->crc;
-    buf->crc = 0;
-    crc_cal = crc16_le(UINT16_MAX, (uint8_t const *)buf, data_len);
-
-    if (crc_cal == crc) {
-        return buf->type;
-    }
-
-    return -1;
-}
-
 static void ESPNowReceiveCallback(const uint8_t* mac_address, const uint8_t *data, int len)
 {
+    if(mac_address == NULL || data == NULL)
+    {
+        ESP_LOGE(TAG, "ESPNowReceiveCallback memory error");
+        return;
+    }
+
     ESP_LOGD(TAG, "%d bytes of data rx'd", len);
-    rxd_obj_t* rxObj = NULL;
-    rxObj = malloc(sizeof(rxd_obj_t));
-    memcpy(&rxObj->sensor_obj, data, len);
-    memcpy(rxObj->src_mac, mac_address, ESP_MAC_LEN);
-    rxObj->data_len = len;
+    rxd_obj_t rxObj = { 0 };
+    memcpy(&rxObj.sensor_obj, data, len);
+    memcpy(rxObj.src_mac, mac_address, ESP_MAC_LEN);
+    rxObj.data_len = len;
     
     //
     //  push data to queue
@@ -155,6 +149,7 @@ void PackSensorData(esp_sensor_t* sensor, uint8_t* buffer, uint32_t* len)
 {
     if(sensor == NULL || buffer == NULL || len == NULL)
     {
+        ESP_LOGE(TAG, "PackSensorData memory error");
         return;
     }
 
@@ -164,7 +159,22 @@ void PackSensorData(esp_sensor_t* sensor, uint8_t* buffer, uint32_t* len)
 
 void CreateAdvertise(uint8_t* buffer)
 {
-
+    if(buffer != NULL)
+    {
+        buffer[INDEX_MSG_TYPE] = MSG_ADVERTISE;
+        buffer[INDEX_DEVICE_TYPE] = SENSOR_NODE;
+        buffer[INDEX_ESPNOW_CHANNEL] = ESPNOW_CHANNEL;
+        buffer[INDEX_ESPNOW_IF_TYPE] = ESPNOW_WIFI_IF;
+        buffer[INDEX_ESPNOW_ADVERT_RSV1] = 0;
+        buffer[INDEX_ESPNOW_SENSOR_TYPE] = MOISTURE_SENSOR;
+        buffer[INDEX_ESPNOW_ADVERT_RSV2] = 0;
+        buffer[INDEX_ESPNOW_SIMULATION] = 1;
+    }
+    else
+    {
+        ESP_LOGE(TAG, "CreateAdvertise memory error, aborting vTaskAdvertise");
+        vTaskDelete(AdvertiseHandle);
+    }
 }
 
 void vTaskSendSensorData(void* pvParameter)
@@ -181,38 +191,74 @@ void vTaskSendSensorData(void* pvParameter)
         esp_now_send(BroadcastMAC, EspNowBuffer, buff_len);
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
+    vTaskDelete(NULL);
+}
 
+void vTaskAdvertise(void* pvParameter)
+{
+    esp_sensor_t device;
+    CreateAdvertise((uint8_t*)&device);
+
+    while(1)
+    {
+        esp_now_send(BroadcastMAC, (uint8_t*)&device, ESPNOW_ADVERT_MSG_LEN);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+    vTaskDelete(NULL);
 }
 
 void vTaskProcessRxdData(void* pvParameters)
 {
-    rxd_obj_t* rxObj = NULL;
- 
-    ESP_LOGI(TAG, "vTaskProcessRxdData started");
- 
+    rxd_obj_t rxObj = { 0 };
     esp_sensor_t sensorObj;
+    esp_now_peer_num_t peerCount = { 0 };
+    uint8_t* ptrU8RxObj = (uint8_t*)&sensorObj;
     sensorObj.sensor_val.u32 = 0;
 
+    ESP_LOGI(TAG, "vTaskProcessRxdData started");
+   
     ESP_LOGI(TAG, "sizeof esp_sensor_t %d ||| size of rxd_obj_t %d", sizeof(esp_sensor_t), sizeof(rxd_obj_t));
 
     while(xQueueReceive(ESPNowRxQueue, &rxObj, portMAX_DELAY) == pdTRUE)
     {
         ESP_LOGI(TAG, "Queue Received Data in Task");
-        memcpy(&sensorObj, &rxObj->sensor_obj, rxObj->data_len);
+        memcpy(&sensorObj, &rxObj.sensor_obj, rxObj.data_len);
 
         ESP_LOGD(TAG, "data len %d src mac %x %x %x %x %x %x\r\n",
-        rxObj->data_len,
-        rxObj->src_mac[0],
-        rxObj->src_mac[1],
-        rxObj->src_mac[2],
-        rxObj->src_mac[3],
-        rxObj->src_mac[4],
-        rxObj->src_mac[5]);
+        rxObj.data_len,
+        rxObj.src_mac[0],
+        rxObj.src_mac[1],
+        rxObj.src_mac[2],
+        rxObj.src_mac[3],
+        rxObj.src_mac[4],
+        rxObj.src_mac[5]);
 
-        ESP_LOGD(TAG, "sensorObj %.1f \r\n", sensorObj.sensor_val.flt);
+        ESP_LOGD(TAG, "ESPNOW_SENSOR_TYPE %02x \r\n",
+        ptrU8RxObj[INDEX_ESPNOW_SENSOR_TYPE]);
 
-        free(rxObj);
+        switch(ptrU8RxObj[INDEX_MSG_TYPE])
+        {
+            case MSG_UNICAST:
+            break;
+
+            case MSG_BROADCAST:
+            break;
+
+            case MSG_ADVERTISE:
+            esp_now_get_peer_num(&peerCount);
+            if(peerCount.total_num <= ESP_NOW_MAX_TOTAL_PEER_NUM
+            && !esp_now_is_peer_exist(rxObj.src_mac))
+            {
+                ESPAddPeer(rxObj);
+            }
+            ESP_LOGI(TAG, "%d peers present", peerCount.total_num);           
+            break;
+
+            default:
+            break;
+        }
     }
+    vTaskDelete(NULL);
 }
 
 void InitSensor()

@@ -11,13 +11,10 @@
 #define ESPNOW_EXAMPLE_H
 
 /* ESPNOW can work in both station and softap mode. It is configured in menuconfig. */
-#if CONFIG_STATION_MODE
+// #define ESPNOW_WIFI_MODE WIFI_MODE_AP
+// #define ESPNOW_WIFI_IF   ESP_IF_WIFI_AP
 #define ESPNOW_WIFI_MODE WIFI_MODE_STA
 #define ESPNOW_WIFI_IF   ESP_IF_WIFI_STA
-#else
-#define ESPNOW_WIFI_MODE WIFI_MODE_AP
-#define ESPNOW_WIFI_IF   ESP_IF_WIFI_AP
-#endif
 
 #define ESPNOW_QUEUE_SIZE           6
 #define ESP_MAC_LEN                 6
