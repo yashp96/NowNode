@@ -19,9 +19,14 @@
 #include "driver/gpio.h"
 
 #include "esp_node.h"
+#include "sensor_service.h"
 
 /* defines */
-#define TAG "APP"
+#if ESPNOW_DEV_MODE == ESPNOW_CLIENT
+#define TAG "App-Master"
+#else
+#define TAG "App-Slave"
+#endif
 
 /* variables and constants */
 
@@ -45,8 +50,16 @@ void InitWiFi()
 
 void app_main()
 {
+    ESP_LOGI(TAG, "Starting ESP-Now device");
     ESP_ERROR_CHECK(nvs_flash_init());
     InitWiFi();
     InitESPNow();
-    // InitSensor();
+    ESP_LOGI(TAG, "Size of node_mac_t %d", sizeof(node_mac_t));
+
+#if ESPNOW_DEV_MODE == ESPNOW_SERVER
+    InitServer();
+#else
+    InitESPNowClient();
+#endif
+
 }

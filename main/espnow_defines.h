@@ -10,6 +10,8 @@
 #ifndef ESPNOW_EXAMPLE_H
 #define ESPNOW_EXAMPLE_H
 
+#define MINIMUM_STACK configMINIMAL_STACK_SIZE
+
 /* ESPNOW can work in both station and softap mode. It is configured in menuconfig. */
 // #define ESPNOW_WIFI_MODE WIFI_MODE_AP
 // #define ESPNOW_WIFI_IF   ESP_IF_WIFI_AP

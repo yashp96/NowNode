@@ -4,6 +4,7 @@
     "files.associations": {
         "espnow_defines.h": "c",
         "assert.h": "c",
-        "esp_node.h": "c"
+        "esp_node.h": "c",
+        "sensor_service.h": "c"
     }
 }
