@@ -17,7 +17,6 @@
 #include "rom/ets_sys.h"
 #include "rom/crc.h"
 #include "driver/gpio.h"
-
 #include "esp_node.h"
 #include "sensor_service.h"
 
