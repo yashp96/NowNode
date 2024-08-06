@@ -32,7 +32,6 @@ void vTaskSendQuery(void* pvParameters)
     ESPNowGenerateQuery((uint8_t*)&query_obj, READ_SENSOR_VALUE, HUMIDITY_SENSOR);
     uint8_t peerIndex = 0;
     node_mac_t peerMac = { 0 };
-    
     while(1)
     {
         if(GetPeerCount() > 0)
