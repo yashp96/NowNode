@@ -115,6 +115,12 @@ void InitESPNow()
         ESP_LOGE(TAG, "ESPSvcQueryQueue initialization failed");
     }
 
+    ESPSvcResponseQueue = xQueueCreate(RX_QUEUE_LEN, sizeof(rxd_obj_t));
+    if(ESPSvcResponseQueue == NULL)
+    {
+        ESP_LOGE(TAG, "ESPSvcResponseQueue initialization failed");
+    }
+
     if( xTaskCreate(vTaskProcessRxdData, "RxProcessor", MINIMUM_STACK*2,
     NULL, 3, &RxProcessHandle) != pdPASS)
     {
@@ -292,7 +298,18 @@ BUFFER[4] %02x\n BUFFER[5] %02x\n BUFFER[6] %02x\n BUFFER[7] %02x\n",
                 {
                     if(xQueueSend(ESPSvcQueryQueue, &rxObj, portMAX_DELAY) == pdTRUE)
                     {
-                        ESP_LOGI(TAG, "Sent to service queue");
+                        ESP_LOGI(TAG, "Query Sent to service queue");
+                    }
+                }
+            break;
+
+            case MSG_UNICAST_RESPONSE:
+                if(esp_now_is_peer_exist(rxObj.src_mac) 
+                /* should we check if device has sent a query?? */)
+                {
+                    if(xQueueSend(ESPSvcResponseQueue, &rxObj, portMAX_DELAY) == pdTRUE)
+                    {
+                        ESP_LOGI(TAG, "Response Sent to service queue");
                     }
                 }
             break;
