@@ -32,11 +32,13 @@ void vTaskSendQuery(void* pvParameters)
     ESPNowGenerateQuery((uint8_t*)&query_obj, READ_SENSOR_VALUE, HUMIDITY_SENSOR);
     uint8_t peerIndex = 0;
     node_mac_t peerMac = { 0 };
+
     while(1)
     {
         if(GetPeerCount() > 0)
         {
             GetPeerMAC(peerIndex, &peerMac);
+
             ESP_LOGD(TAG, "peer(%d) --- %x:%x:%x:%x:%x:%x\r\n", (uint32_t)peerIndex,
             peerMac.mac[0], peerMac.mac[1], peerMac.mac[2],
             peerMac.mac[3], peerMac.mac[4], peerMac.mac[5]);
@@ -53,7 +55,9 @@ void vTaskSendQuery(void* pvParameters)
 }
 
 void InitESPNowClient()
+
 {
+    
     if( xTaskCreate(vTaskSendQuery, "Client", 2*MINIMUM_STACK,
     NULL, 3, &ClientTaskHandle) != pdPASS)
     {

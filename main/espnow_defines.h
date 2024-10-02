@@ -31,12 +31,14 @@ typedef enum {
 typedef struct {
     uint8_t mac_address[ESP_MAC_LEN];
     esp_now_send_status_t status;
+
 } espnow_event_send_cb_t;
 
 typedef struct {
     uint8_t mac_address[ESP_MAC_LEN];
     uint8_t *data;
     int data_len;
+
 } espnow_event_recv_cb_t;
 
 typedef union {
@@ -54,6 +56,7 @@ enum {
     ESPNOW_DATA_UNICAST,
     ESPNOW_DATA_BROADCAST,
     ESPNOW_DATA_MAX
+    
 };
 
 /* User defined field of ESPNOW data in this example. */
